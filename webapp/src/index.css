@@ -1,0 +1,331 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+@import "@fontsource-variable/inter";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --font-heading: var(--font-sans);
+  --font-sans: "Inter Variable", sans-serif;
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --color-foreground: var(--foreground);
+  --color-background: var(--background);
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
+}
+
+:root {
+  --background: oklch(0.985 0.008 210);
+  --foreground: oklch(0.19 0.035 250);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.19 0.035 250);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.19 0.035 250);
+  --primary: oklch(0.64 0.19 48);
+  --primary-foreground: oklch(0.99 0.01 82);
+  --secondary: oklch(0.94 0.035 190);
+  --secondary-foreground: oklch(0.25 0.06 230);
+  --muted: oklch(0.95 0.012 230);
+  --muted-foreground: oklch(0.48 0.035 248);
+  --accent: oklch(0.93 0.055 165);
+  --accent-foreground: oklch(0.25 0.065 205);
+  --destructive: oklch(0.577 0.245 27.325);
+  --border: oklch(0.88 0.025 235);
+  --input: oklch(0.88 0.025 235);
+  --ring: oklch(0.7 0.16 48);
+  --chart-1: oklch(0.64 0.19 48);
+  --chart-2: oklch(0.58 0.14 225);
+  --chart-3: oklch(0.62 0.12 160);
+  --chart-4: oklch(0.58 0.17 20);
+  --chart-5: oklch(0.52 0.1 285);
+  --radius: 0.625rem;
+  --sidebar: oklch(0.97 0.012 220);
+  --sidebar-foreground: oklch(0.19 0.035 250);
+  --sidebar-primary: oklch(0.64 0.19 48);
+  --sidebar-primary-foreground: oklch(0.99 0.01 82);
+  --sidebar-accent: oklch(0.93 0.055 165);
+  --sidebar-accent-foreground: oklch(0.25 0.065 205);
+  --sidebar-border: oklch(0.88 0.025 235);
+  --sidebar-ring: oklch(0.7 0.16 48);
+}
+
+.dark {
+  --background: oklch(0.16 0.035 255);
+  --foreground: oklch(0.97 0.012 230);
+  --card: oklch(0.2 0.04 252);
+  --card-foreground: oklch(0.97 0.012 230);
+  --popover: oklch(0.2 0.04 252);
+  --popover-foreground: oklch(0.97 0.012 230);
+  --primary: oklch(0.74 0.18 55);
+  --primary-foreground: oklch(0.17 0.035 255);
+  --secondary: oklch(0.27 0.055 215);
+  --secondary-foreground: oklch(0.94 0.025 190);
+  --muted: oklch(0.27 0.035 248);
+  --muted-foreground: oklch(0.74 0.03 235);
+  --accent: oklch(0.34 0.085 170);
+  --accent-foreground: oklch(0.95 0.025 170);
+  --destructive: oklch(0.704 0.191 22.216);
+  --border: oklch(1 0 0 / 13%);
+  --input: oklch(1 0 0 / 18%);
+  --ring: oklch(0.74 0.18 55);
+  --chart-1: oklch(0.74 0.18 55);
+  --chart-2: oklch(0.68 0.13 220);
+  --chart-3: oklch(0.7 0.13 165);
+  --chart-4: oklch(0.68 0.16 25);
+  --chart-5: oklch(0.68 0.12 290);
+  --sidebar: oklch(0.2 0.04 252);
+  --sidebar-foreground: oklch(0.97 0.012 230);
+  --sidebar-primary: oklch(0.74 0.18 55);
+  --sidebar-primary-foreground: oklch(0.17 0.035 255);
+  --sidebar-accent: oklch(0.34 0.085 170);
+  --sidebar-accent-foreground: oklch(0.95 0.025 170);
+  --sidebar-border: oklch(1 0 0 / 13%);
+  --sidebar-ring: oklch(0.74 0.18 55);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+  html,
+  body,
+  #root {
+    min-height: 100%;
+  }
+  button:not(:disabled),
+  [role="button"]:not(:disabled) {
+    cursor: pointer;
+  }
+  html {
+    @apply font-sans;
+  }
+}
+
+textarea.tx-input {
+  width: 100%;
+  min-width: 0;
+  min-height: 360px;
+  resize: vertical;
+}
+
+textarea.tx-input--code {
+  font-family:
+    ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono",
+    "Courier New", monospace;
+  line-height: 1.45;
+  tab-size: 2;
+  -moz-tab-size: 2;
+}
+
+textarea.tx-config {
+  min-height: 220px;
+}
+
+.excalidraw-host {
+  width: 100%;
+  height: 100%;
+}
+
+.mobile-action-bar {
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+}
+
+.mobile-action-bar::-webkit-scrollbar {
+  display: none;
+}
+
+.markdown-preview {
+  line-height: 1.7;
+  color: var(--card-foreground);
+}
+
+.markdown-preview h1 {
+  font-size: 1.65rem;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.markdown-preview h2 {
+  margin-top: 1.5rem;
+  font-size: 1.25rem;
+  font-weight: 650;
+  line-height: 1.25;
+}
+
+.markdown-preview h3 {
+  margin-top: 0.75rem;
+  font-size: 1rem;
+  font-weight: 650;
+}
+
+.markdown-preview p {
+  margin-top: 0.75rem;
+}
+
+.markdown-preview a {
+  color: var(--primary);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.markdown-preview ul,
+.markdown-preview ol {
+  margin-top: 0.75rem;
+  padding-left: 1.25rem;
+}
+
+.markdown-preview ul {
+  list-style: disc;
+}
+
+.markdown-preview ol {
+  list-style: decimal;
+}
+
+.markdown-preview li + li {
+  margin-top: 0.25rem;
+}
+
+.markdown-preview blockquote {
+  margin-top: 1rem;
+  border-left: 3px solid var(--border);
+  color: var(--muted-foreground);
+  padding-left: 1rem;
+}
+
+.markdown-preview code {
+  border-radius: var(--radius-sm);
+  background: var(--muted);
+  padding: 0.1rem 0.3rem;
+  font-family:
+    ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono",
+    "Courier New", monospace;
+  font-size: 0.9em;
+}
+
+.markdown-preview pre {
+  margin-top: 0.75rem;
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--muted);
+  padding: 0.875rem;
+}
+
+.markdown-preview pre code {
+  background: transparent;
+  padding: 0;
+}
+
+.markdown-preview table {
+  margin-top: 1rem;
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+
+.markdown-preview th,
+.markdown-preview td {
+  border: 1px solid var(--border);
+  padding: 0.5rem 0.625rem;
+  vertical-align: top;
+}
+
+.markdown-preview th {
+  background: var(--muted);
+  font-weight: 650;
+  text-align: left;
+}
+
+.markdown-preview hr {
+  margin: 1.5rem 0;
+  border: 0;
+  border-top: 1px solid var(--border);
+}
+
+.markdown-preview .katex-display {
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 0.35rem 0;
+}
+
+.sidebar-markdown {
+  background: var(--sidebar);
+  font-size: 0.875rem;
+}
+
+.sidebar-markdown h1 {
+  font-size: 1.25rem;
+}
+
+.sidebar-markdown h2 {
+  margin-top: 1.25rem;
+  font-size: 1rem;
+}
+
+.sidebar-markdown h3 {
+  font-size: 0.95rem;
+}
+
+.sidebar-markdown table {
+  font-size: 0.8rem;
+}
+
+@media (max-width: 960px) {
+  textarea.tx-input {
+    min-height: 260px;
+    resize: none;
+  }
+
+  textarea.tx-input--mobile {
+    max-height: calc(100dvh - 250px);
+    font-size: 12px;
+    line-height: 1.4;
+  }
+
+  .mobile-panel {
+    border-radius: var(--radius-xl);
+  }
+
+  .graph-canvas .excalidraw-host {
+    border-radius: var(--radius-lg);
+  }
+}

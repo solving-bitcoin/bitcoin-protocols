@@ -1,0 +1,4 @@
+# Set the Netlify base directory to webapp; bundled protocols live in ../protocols/.
+[build]
+command = "pnpm run build"
+publish = "dist"
