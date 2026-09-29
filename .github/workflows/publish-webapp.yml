@@ -1,0 +1,54 @@
+name: Publish webapp
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "webapp/**"
+      - "protocols/**"
+      - ".github/workflows/publish-webapp.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: publish-webapp
+  cancel-in-progress: true
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.33.2
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: webapp/pnpm-lock.yaml
+
+      - name: Install
+        working-directory: webapp
+        run: pnpm install --frozen-lockfile
+
+      - name: Build
+        working-directory: webapp
+        run: pnpm build
+
+      - name: Publish dist
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./webapp/dist
+          publish_branch: gh-pages
+          force_orphan: true
+          commit_message: "Publish webapp dist ${{ github.sha }}"
