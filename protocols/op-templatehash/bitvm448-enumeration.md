@@ -1,8 +1,8 @@
 # BitVM-448 - strict operator-removal enumeration
 
-An operator fronts a peg-out, then asserts reimbursement from a prepared deposit slot with a fresh bond. A false BitVM3 assertion exposes the operator's slashing secret, allowing cancellation to restore the reserve, remove that operator, and pay the bond as miner fees. An unchallenged assertion returns the reserve amount and bond to the operator after the challenge window.
+Users fund prepared reserve slots; operators front withdrawals and post bonded BitVM3 reimbursement assertions bound to the payout and slot. A false assertion reveals the operator's slashing secret to off-chain challengers. Cancellation restores the reserve, removes that operator, and pays its bond as miner fees. An unchallenged assertion returns the reserve amount and bond to the operator after the challenge window.
 
-This variant requires OP_TEMPLATEHASH and timely challengers. It precomputes every remaining-operator subset, making setup exponential in the operator count. The graph shows both removal orders for two operators; recovery after both are removed is unspecified. Amounts illustrate a 1 BTC reserve and 0.01 BTC bond, with ordinary fees omitted.
+This optimistic variant assumes an OP_TEMPLATEHASH consensus change, sound BitVM3 garbling and assertion setup, available assertion data, and timely challenges. It precomputes every remaining-operator subset, making setup exponential. Slots have fixed amounts and parameters; recovery after all operators are removed is unspecified.
 
 Source: [BitVM-448: Covenant-Based BitVM3 Bridges](https://robinlinus.com/bitvm448.pdf)
 

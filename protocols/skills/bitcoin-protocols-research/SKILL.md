@@ -38,8 +38,8 @@ channels, swaps, custody, vaults, bridges, and other Bitcoin constructions.
   or additional cryptographic capability before choosing its location. Put it
   in a descriptive assumption folder, such as `native-zk-verifier/`, `op-cat/`,
   `op-templatehash/`, `witness-encryption/`, or `functional-encryption/`.
-  Nest folders for combined requirements and document all of them in the folder
-  README, distinguishing consensus changes, policy changes, cryptographic
+  Nest folders for combined requirements and summarize all of them in the protocol
+  Markdown's introduction, distinguishing consensus changes, policy changes, cryptographic
   assumptions, and setup trust. Do not imply these capabilities are available
   under current Bitcoin rules. An optimistic fraud-proof system does not belong
   under `native-zk-verifier/` merely because it uses a ZK proof off-chain.

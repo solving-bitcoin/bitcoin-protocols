@@ -1,5 +1,11 @@
 # FLEX - Bob predeposit variant (Figure 2)
 
+Alice fronts BTC to withdrawing user Carol after her side-system burn; Bob is the designated challenger. Bob must prepay Alice's proof-publication cost to block fast reimbursement. If that predeposit confirms, the basic FLEX dispute follows: both parties post bonds and publish signed circuit inputs, and off-chain proof evaluation reveals the winning party's bond-claim secret. An invalid proof lets Bob block reimbursement; otherwise Alice can reclaim her payment after the dispute window.
+
+The protocol assumes verifiable, secret-preserving garbling, sound burn proofs, one-time circuit keys, non-colluding setup signers, and timely funded challenges. Exact prepayment adjustments to the bonds and concrete witness and relay feasibility remain unspecified.
+
+Source: [FLEX](https://eprint.iacr.org/2025/1392), Section 6.13 and Figure 2, revision 2025-08-21.
+
 ```bridgeflow
 color_groups:
   setup_presignature: blue

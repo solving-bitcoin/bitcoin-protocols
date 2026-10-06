@@ -1,8 +1,8 @@
 # BitVM-448 - bounded semantic-slashing unrolling
 
-An operator fronts a peg-out and posts a bonded BitVM3 reimbursement assertion. Cancellation restores the reserve and pays the bond as miner fees, advancing to the next prepared covenant state. Operator leaves remain in the script: a revealed slashing secret lets challengers cancel that operator's later attempts, each of which requires a fresh bond. Unchallenged assertions mature after the challenge window.
+Users fund prepared reserve slots; operators front withdrawals and post bonded BitVM3 assertions bound to the payout and slot. Off-chain challengers use a false assertion's revealed secret to cancel reimbursement, restore the reserve, and pay the bond as miner fees. Cancellation advances the attempt depth while retaining every operator's spending path. A revealed secret also permits cancelling that operator's later attempts, each requiring a fresh bond. Unchallenged assertions mature after the challenge window.
 
-This OP_TEMPLATEHASH variant precomputes a bounded sequence of states by attempt depth, avoiding enumeration of operator subsets. The graph shows an A-first history with room for two cancellations. Recovery at the depth limit is unspecified. It relies on timely challengers; the illustrative reserve is 1 BTC and each bond is 0.01 BTC, with ordinary fees omitted.
+This optimistic variant assumes an OP_TEMPLATEHASH consensus change, sound BitVM3 garbling and assertion setup, available assertion data, and timely challenges. It precomputes a bounded sequence of states for fixed-parameter slots; recovery at the depth limit is unspecified.
 
 Source: [BitVM-448: Covenant-Based BitVM3 Bridges](https://robinlinus.com/bitvm448.pdf)
 

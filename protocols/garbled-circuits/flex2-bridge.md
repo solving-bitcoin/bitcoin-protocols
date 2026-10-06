@@ -1,5 +1,11 @@
 # FLEX2 - optimistic bridge with early refund (A = B = 0)
 
+Alice fronts BTC to withdrawing user Carol and seeks reimbursement; Bob can challenge her burn proof. All bridge signers can alternatively authorize a direct payment. A challenge requires bonds before signed circuit inputs are published; off-chain evaluation reveals the winner's bond-claim secret, and an invalid proof blocks Alice's reimbursement. Alice can use early reimbursement after closing Bob's challenge opportunity or resolving his dispute. Bob's StillOpen transaction blocks that early path; ordinary reimbursement depends on its separate enabler surviving. Other asserters can close stalled disputes.
+
+This graph shows one Alice/Bob dispute with A = B = 0. It assumes verifiable, secret-preserving garbling, sound burn proofs, one-time circuit keys, non-colluding setup signers, and timely funded challenges. Concrete witness and relay feasibility remain unresolved.
+
+Source: [FLEX](https://eprint.iacr.org/2025/1392), Section 7 and Figures 3–4, revision 2025-08-21.
+
 ```bridgeflow
 color_groups:
   setup_presignature: blue

@@ -1,8 +1,8 @@
 # OP_CAT subchains - dirty ledger
 
-Anyone can extend the subchain's annex history without proving that each subblock is valid. Off-chain execution ignores invalid subblocks, while the shared funds remain in the covenant. Bitcoin withdrawals require a STARK proof authorizing the payout against the valid history. Optional recursive Groth16 proofs help light clients verify that history off-chain.
+Users deposit into a shared reserve and request Bitcoin withdrawals; anyone can publish subblocks in the Taproot annex. Publishers advance the history commitment and recreate the funds covenant without proving each subblock valid. Off-chain participants ignore invalid execution while retaining its published history. Withdrawals require a STARK proof binding valid execution, the reserve, and payout; optional recursive Groth16 proofs let light clients verify execution off-chain.
 
-The design assumes OP_CAT, annex relay support, and a STARK verifier that fits in one Bitcoin transaction. Deposit aggregation and crediting remain unspecified in the source and are shown schematically. The example adds 0.1 BTC to a 1 BTC reserve, then withdraws 0.25 BTC; fees are omitted.
+The design assumes an OP_CAT consensus change, annex relay support, Bitcoin data availability and liveness, and a sound on-chain STARK verifier fitting one transaction. Groth16 adds setup and soundness assumptions. Verifier resources and deposit handling remain unspecified.
 
 Source: [Bitcoin Subchains via OP_CAT and the Taproot Annex](https://gist.github.com/RobinLinus/8183bec5040e75d57642e69bfaa22a6f/33a4129d75f9ae6ee2c686e2f09c284e9087ed61)
 

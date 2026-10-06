@@ -1,5 +1,11 @@
 # FLEX - basic optimistic bridge (Figure 1)
 
+Alice is the paying operator, Bob the designated challenger, and Carol the withdrawing user. Alice and Bob can jointly pay Carol from the reserve, or Alice fronts the payment after Carol burns her wrapped BTC and requests reimbursement. During a dispute, both parties post bonds and publish signed inputs to garbled circuits. A valid burn proof reveals Alice's bond-claim secret; an invalid proof reveals Bob's and lets him block reimbursement. Alice can reimburse after the challenge window if its enabler survives; missed responses and bond refunds have timeout paths.
+
+This optimistic protocol assumes verifiable, secret-preserving garbling, sound burn proofs, one-time circuit keys, non-colluding setup signers, and a timely funded challenger. Proof evaluation is off-chain; concrete witness and relay feasibility remain unresolved.
+
+Source: [FLEX](https://eprint.iacr.org/2025/1392), Sections 6.1–6.10, revision 2025-08-21.
+
 ```bridgeflow
 color_groups:
   setup_presignature: blue

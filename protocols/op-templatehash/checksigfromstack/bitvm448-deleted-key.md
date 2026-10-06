@@ -1,8 +1,8 @@
 # BitVM-448 - CSFS deleted-key recursion
 
-An operator fronts a peg-out and posts a bonded BitVM3 reimbursement assertion. Cancellation recreates the same reserve script and amount, paying the bond as miner fees. A revealed slashing secret allows later attempts by that operator to be cancelled too, each at the cost of a fresh bond. Unchallenged assertions mature after the challenge window.
+Users fund prepared reserve slots; operators front withdrawals and post bonded BitVM3 assertions bound to the payout and slot. Off-chain challengers use a false assertion's revealed secret to cancel reimbursement. Cancellation recreates the same reserve and pays the bond as miner fees; the secret also permits cancelling that operator's later attempts. Unchallenged assertions mature after the challenge window.
 
-OP_TEMPLATEHASH, CHECKSIGFROMSTACK, and honest key deletion for each prepared template enable compact, indefinite covenant recursion. The graph shows a few iterations for a 1 BTC reserve and 0.01 BTC bonds, with ordinary fees omitted. The design still requires prepared deposit slots and timely challengers; recurring covenant templates do not make single-use BitVM3 assertion artifacts reusable.
+OP_TEMPLATEHASH and CHECKSIGFROMSTACK consensus changes enable indefinite covenant recursion with per-template setup signatures and at least one N-of-N participant honestly deleting its key share. This optimistic protocol also assumes sound BitVM3 garbling and assertion setup, available assertion data, and timely challenges. Recurring covenants do not make single-use assertion artifacts reusable.
 
 Source: [BitVM-448: Covenant-Based BitVM3 Bridges](https://robinlinus.com/bitvm448.pdf)
 
