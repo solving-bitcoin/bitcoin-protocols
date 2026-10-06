@@ -1,66 +1,286 @@
-# Timestamp-only Bitcoin light client — deferred withdrawal proof
+# Timestamp-only Bitcoin light client — epoch fan-out
 
-Users fund a reserve, and an operator publishes signed epoch-end timestamps without header hashes or chain proofs. Anyone can disable a stalled timestamp stream through its timeout spend. After paying a withdrawing user, the operator requests reimbursement and supplies a header chain and withdrawal evidence matching the published timestamps. An assumed verifier checks the chain, publication deadlines, claim, and payout, then binds reimbursement to the matching reserve and withdrawal gate.
+An operator publishes signed timestamps along one transaction chain. Each epoch also funds a Fanout with independent garbled-circuit outputs; the graph shows two epochs and two circuits per fan-out. Spending a circuit output requires its own Lamport signature verification and creates Assert, revealing that circuit's proof-input labels. The proof covers **all previous signed timestamps** from bootstrap through that epoch, their header-chain correspondence, publication timing, and the claim. A watchtower evaluates the Argo/BitVM3-style garbled verifier off-chain. If the proof is invalid, Disprove slashes the slot's funds; otherwise the operator can Withdraw after Delta from Assert.
 
-The design requires an agreed Bitcoin checkpoint, independently authenticated publication observations, explicit timing bounds, and sound proof enforcement with transaction binding. The Bitcoin implementation and its resource requirements remain unspecified; canonical-chain security is unproved. Disabling the stream blocks this withdrawal route, while reserve recovery is outside the graph.
+Signing a different timestamp for an already signed epoch exposes conflicting Lamport openings under that epoch's registered key. SlashTimestamp spends the same Assert output, so it also blocks Withdraw. Signing a new epoch with its own key is allowed. The illustrated funds are operator collateral; each circuit slot is independent and is slashed or withdrawn separately. The design assumes sound proofs, verified garbling, fresh circuit keys, an authenticated timestamp history, timely watchtowers, and setup signatures binding the graph. Concrete history/transaction binding and resource limits remain unspecified; amounts omit fees.
 
-References: Bitcoin Core v29.0 [difficulty adjustment](https://github.com/bitcoin/bitcoin/blob/v29.0/src/pow.cpp), [network parameters](https://github.com/bitcoin/bitcoin/blob/v29.0/src/kernel/chainparams.cpp), [header validation](https://github.com/bitcoin/bitcoin/blob/v29.0/src/validation.cpp), and [median-time calculation](https://github.com/bitcoin/bitcoin/blob/v29.0/src/chain.h); [BIP 65](https://github.com/bitcoin/bips/blob/master/bip-0065.mediawiki) and [BIP 113](https://github.com/bitcoin/bips/blob/master/bip-0113.mediawiki).
+The intended **20% hashrate threshold is conditional**. A malicious operator could mine a private fork and manipulate its retarget timestamps to lower difficulty, producing more blocks per unit of hashpower. If authenticated timestamp commitments keep its difficulty at least one quarter of the honest chain's throughout the race, an attacker with fraction q of total hashpower has relative block-production rate at most 4q/(1−q). Staying slower requires 4q < 1−q, hence q < 1/5 = 20%; equality provides no security margin. Bitcoin's [factor-four retarget limit](https://github.com/bitcoin/bitcoin/blob/v29.0/src/pow.cpp) bounds each adjustment, not the difficulty ratio of arbitrary forks across many epochs. This timestamp-only construction still needs a proof of that global bound and assumptions on initial lead, timing, and confirmations; the calculation is a block-rate argument, not a guarantee of canonical chainwork.
+
+References: [Argo MAC](https://eprint.iacr.org/2026/049); [BitVM3](https://bitvm.org/bitvm3.pdf), Sections 3.4–4; [Bitcoin Core v29.0 retarget calculation](https://github.com/bitcoin/bitcoin/blob/v29.0/src/pow.cpp).
 
 ```bridgeflow
+tx_width: 480
 color_groups:
   timestamp_signature: green
-  deferred_proof: purple
-  payout_binding: blue
-  deadline: orange
+  setup_signature: blue
+  garbled_inputs: purple
+  timeout_path: orange
+  disprove: red
+  timestamp_equivocation: pink
 ```
 
 ## tx: setup
 
 ```bridgeflow
-label: Setup reserve and agreed bootstrap
+label: Setup
+width: 480
 inputs:
-  - label: User reserve funds + operator control funds
+  - label: |-
+      Operator funds: 0.04000330 BTC
+      Agreed bootstrap + registered timestamp keys
 outputs:
-  - amount: "1.00000000"
-    label: Reserve — proof-enforcement adapter assumed
-    spending_paths:
-      - id: bound_withdrawal
-        label: |-
-          Adapter binds this reserve to
-          matching verified withdrawal gate
-          and exact authorized payout
-  - amount: "0.00000330"
-    label: Timestamp stream seed
+  - amount: "0.04000330"
+    label: Epoch chain funding
     spending_paths:
       - id: operator_record
-        label: Operator transaction signature
-      - id: missed_record
-        label: Anyone + CLTV(H_i)
+        label: Operator + prepared epoch transaction
 ```
 
 ## tx: timestamp_i
 
 ```bridgeflow
-label: Timestamp i — sign and publish T_i
+label: Timestamp i
+width: 480
 inputs:
   - tx: setup
-    output: 1
+    output: 0
     spending_path: operator_record
-    sighash_flag: sighash_all
     color: timestamp_signature
-    arrow_label: nLockTime = T_i - delta_future; non-final sequence
+    label: |-
+      LamportSign(pk_T,i, T_i)
+      Authenticated epoch-end record; no header hash
+    sighash_flag: sighash_all
 outputs:
-  - amount: "0.00000330"
-    label: Timestamp chain control
+  - amount: "0.02000330"
+    label: Continue epoch chain
     spending_paths:
       - id: operator_record
-        label: Operator transaction signature
-      - id: missed_record
-        label: Anyone + CLTV(H_(i+1))
+        label: Operator — next epoch timestamp
+  - amount: "0.02000000"
+    label: Epoch i fan-out funds
+    spending_paths:
+      - id: fanout
+        label: "Operator + setup signature: Fanout"
   - amount: "0.00000000"
+    label: "Timestamp record: epoch i, T_i"
+    spending_paths:
+      - id: unspendable
+        label: OP_RETURN(domain, operator, epoch, height, T)
+```
+
+## tx: fanout_i
+
+```bridgeflow
+label: Fanout i
+width: 480
+inputs:
+  - tx: timestamp_i
+    output: 1
+    spending_path: fanout
+    color: setup_signature
     label: |-
-      OP_RETURN(domain, network, reserve, i, h_i, T_i)
-      No header hash; no chain proof
+      Full authenticated history: T_0,...,T_i
+      Same epoch keys reused in every circuit statement
+outputs:
+  - amount: "0.01000000"
+    label: Garbled circuit GC_i,0
+    spending_paths:
+      - id: assert
+        label: |-
+          LamportVerify(pk_GC_i,0)
+          Operator signs pi + statement
+          Reveal this circuit's input labels
+          Setup signature: this slot's Assert
+  - amount: "0.01000000"
+    label: Garbled circuit GC_i,1
+    spending_paths:
+      - id: assert
+        label: |-
+          LamportVerify(pk_GC_i,1)
+          Operator signs pi + statement
+          Reveal this circuit's input labels
+          Setup signature: this slot's Assert
+```
+
+## tx: assert_i_0
+
+```bridgeflow
+label: Assert (i, 0)
+width: 480
+inputs:
+  - tx: fanout_i
+    output: 0
+    spending_path: assert
+    color: garbled_inputs
+    label: |-
+      Lamport proof signature for GC_i,0
+      pi covers every timestamp T_0,...,T_i
+      Header validity, publication timing and claim
+outputs:
+  - amount: "0.01000000"
+    label: Asserted funds
+    spending_paths:
+      - id: withdraw
+        label: |-
+          Operator + CSV(Delta) from this Assert
+          Setup signature: Withdraw
+      - id: disprove
+        label: |-
+          Watchtower + false-output preimage
+          from evaluating GC_i,0
+      - id: timestamp_equivocation
+        label: |-
+          Watchtower + conflicting openings
+          T_j != T'_j under the same pk_T,j
+          Epoch j is in this signed history
+```
+
+## tx: withdraw_i_0
+
+```bridgeflow
+label: Withdraw (i, 0)
+width: 480
+inputs:
+  - tx: assert_i_0
+    output: 0
+    spending_path: withdraw
+    color: timeout_path
+    arrow_label: Delta after Assert
+outputs:
+  - amount: "0.01000000"
+    label: Operator withdraws slot funds
+    spending_paths:
+      - id: operator
+        label: Operator signature
+```
+
+## tx: disprove_i_0
+
+```bridgeflow
+label: Disprove / Slash (i, 0)
+width: 480
+inputs:
+  - tx: assert_i_0
+    output: 0
+    spending_path: disprove
+    color: disprove
+    label: False-output key from GC_i,0
+outputs:
+  - amount: "0.01000000"
+    label: Slashed operator funds
+    spending_paths:
+      - id: unspendable
+        label: OP_RETURN — unspendable
+```
+
+## tx: slash_timestamp_i_0
+
+```bridgeflow
+label: SlashTimestamp (i, 0)
+width: 480
+inputs:
+  - tx: assert_i_0
+    output: 0
+    spending_path: timestamp_equivocation
+    color: timestamp_equivocation
+    label: |-
+      Two openings for a differing timestamp bit
+      Same operator, domain and epoch key
+outputs:
+  - amount: "0.01000000"
+    label: Slashed operator funds
+    spending_paths:
+      - id: unspendable
+        label: OP_RETURN — unspendable
+```
+
+## tx: assert_i_1
+
+```bridgeflow
+label: Assert (i, 1)
+width: 480
+inputs:
+  - tx: fanout_i
+    output: 1
+    spending_path: assert
+    color: garbled_inputs
+    label: |-
+      Lamport proof signature for GC_i,1
+      pi covers every timestamp T_0,...,T_i
+      Header validity, publication timing and claim
+outputs:
+  - amount: "0.01000000"
+    label: Asserted funds
+    spending_paths:
+      - id: withdraw
+        label: |-
+          Operator + CSV(Delta) from this Assert
+          Setup signature: Withdraw
+      - id: disprove
+        label: |-
+          Watchtower + false-output preimage
+          from evaluating GC_i,1
+      - id: timestamp_equivocation
+        label: |-
+          Watchtower + conflicting openings
+          T_j != T'_j under the same pk_T,j
+          Epoch j is in this signed history
+```
+
+## tx: withdraw_i_1
+
+```bridgeflow
+label: Withdraw (i, 1)
+width: 480
+inputs:
+  - tx: assert_i_1
+    output: 0
+    spending_path: withdraw
+    color: timeout_path
+    arrow_label: Delta after Assert
+outputs:
+  - amount: "0.01000000"
+    label: Operator withdraws slot funds
+    spending_paths:
+      - id: operator
+        label: Operator signature
+```
+
+## tx: disprove_i_1
+
+```bridgeflow
+label: Disprove / Slash (i, 1)
+width: 480
+inputs:
+  - tx: assert_i_1
+    output: 0
+    spending_path: disprove
+    color: disprove
+    label: False-output key from GC_i,1
+outputs:
+  - amount: "0.01000000"
+    label: Slashed operator funds
+    spending_paths:
+      - id: unspendable
+        label: OP_RETURN — unspendable
+```
+
+## tx: slash_timestamp_i_1
+
+```bridgeflow
+label: SlashTimestamp (i, 1)
+width: 480
+inputs:
+  - tx: assert_i_1
+    output: 0
+    spending_path: timestamp_equivocation
+    color: timestamp_equivocation
+    label: |-
+      Two openings for a differing timestamp bit
+      Same operator, domain and epoch key
+outputs:
+  - amount: "0.01000000"
+    label: Slashed operator funds
     spending_paths:
       - id: unspendable
         label: OP_RETURN — unspendable
@@ -69,181 +289,316 @@ outputs:
 ## tx: timestamp_next
 
 ```bridgeflow
-label: Timestamp i+1 — sign and publish T_(i+1)
+label: Timestamp i+1
+width: 480
 inputs:
   - tx: timestamp_i
     output: 0
     spending_path: operator_record
-    sighash_flag: sighash_all
     color: timestamp_signature
-    arrow_label: nLockTime = T_(i+1) - delta_future; non-final sequence
-outputs:
-  - amount: "0.00000330"
-    label: Latest timestamp control
-    spending_paths:
-      - id: operator_continue_or_claim
-        label: Operator — next timestamp or withdrawal request
-      - id: missed_record
-        label: Anyone + CLTV(H_(i+2))
-  - amount: "0.00000000"
     label: |-
-      OP_RETURN(domain, network, reserve, i+1, h_(i+1), T_(i+1))
-      No header hash; no chain proof
-    spending_paths:
-      - id: unspendable
-        label: OP_RETURN — unspendable
-```
-
-## tx: timeout_first_record
-
-```bridgeflow
-label: Disable stream after missing first timestamp
-inputs:
-  - tx: setup
-    output: 1
-    spending_path: missed_record
-    color: deadline
-    arrow_label: CLTV(H_i); conflicts with Timestamp i
-outputs:
-  - amount: "0.00000000"
-    label: Disabled timestamp stream
-    spending_paths:
-      - id: unspendable
-        label: OP_RETURN — unspendable
-```
-
-## tx: timeout_next_record
-
-```bridgeflow
-label: Disable stream after missing next timestamp
-inputs:
-  - tx: timestamp_i
-    output: 0
-    spending_path: missed_record
-    color: deadline
-    arrow_label: CLTV(H_(i+1)); conflicts with Timestamp i+1
-outputs:
-  - amount: "0.00000000"
-    label: Disabled timestamp stream
-    spending_paths:
-      - id: unspendable
-        label: OP_RETURN — unspendable
-```
-
-## tx: timeout_latest_record
-
-```bridgeflow
-label: Disable stream after missing continuation
-inputs:
-  - tx: timestamp_next
-    output: 0
-    spending_path: missed_record
-    color: deadline
-    arrow_label: CLTV(H_(i+2)); conflicts with withdrawal request
-outputs:
-  - amount: "0.00000000"
-    label: Disabled timestamp stream
-    spending_paths:
-      - id: unspendable
-        label: OP_RETURN — unspendable
-```
-
-## tx: user_payout
-
-```bridgeflow
-label: Operator pays withdrawing user
-inputs:
-  - label: Operator liquidity + application withdrawal authorization
-outputs:
-  - amount: "1.00000000"
-    label: User receives BTC
-    spending_paths:
-      - id: user
-        label: User signature
-```
-
-## tx: request_withdrawal
-
-```bridgeflow
-label: Freeze timestamp transcript for withdrawal
-inputs:
-  - tx: timestamp_next
-    output: 0
-    spending_path: operator_continue_or_claim
+      LamportSign(pk_T,i+1, T_i+1)
+      Authenticated epoch-end record; no header hash
     sighash_flag: sighash_all
-    color: timestamp_signature
-    arrow_label: Deadline and transcript checked by adapter
 outputs:
   - amount: "0.00000330"
-    label: Withdrawal gate — adapter assumed
+    label: Continue epoch chain
     spending_paths:
-      - id: deferred_chain_proof
+      - id: operator_record
+        label: Operator — next epoch timestamp
+  - amount: "0.02000000"
+    label: Epoch i+1 fan-out funds
+    spending_paths:
+      - id: fanout
+        label: "Operator + setup signature: Fanout"
+  - amount: "0.00000000"
+    label: "Timestamp record: epoch i+1, T_i+1"
+    spending_paths:
+      - id: unspendable
+        label: OP_RETURN(domain, operator, epoch, height, T)
+```
+
+## tx: fanout_next
+
+```bridgeflow
+label: Fanout i+1
+width: 480
+inputs:
+  - tx: timestamp_next
+    output: 1
+    spending_path: fanout
+    color: setup_signature
+    label: |-
+      Full authenticated history: T_0,...,T_i+1
+      Same epoch keys reused in every circuit statement
+outputs:
+  - amount: "0.01000000"
+    label: Garbled circuit GC_i+1,0
+    spending_paths:
+      - id: assert
         label: |-
-          Operator + VerifyDeferredChain(P)
-          Agreed bootstrap + authenticated transcript
-          Every signed T_j matches header at h_j
-          PoW + retargets + MTP + timing + confirmations
-          Claim + user payout + exact reserve binding
+          LamportVerify(pk_GC_i+1,0)
+          Operator signs pi + statement
+          Reveal this circuit's input labels
+          Setup signature: this slot's Assert
+  - amount: "0.01000000"
+    label: Garbled circuit GC_i+1,1
+    spending_paths:
+      - id: assert
+        label: |-
+          LamportVerify(pk_GC_i+1,1)
+          Operator signs pi + statement
+          Reveal this circuit's input labels
+          Setup signature: this slot's Assert
+```
+
+## tx: assert_next_0
+
+```bridgeflow
+label: Assert (i+1, 0)
+width: 480
+inputs:
+  - tx: fanout_next
+    output: 0
+    spending_path: assert
+    color: garbled_inputs
+    label: |-
+      Lamport proof signature for GC_i+1,0
+      pi covers every timestamp T_0,...,T_i+1
+      Header validity, publication timing and claim
+outputs:
+  - amount: "0.01000000"
+    label: Asserted funds
+    spending_paths:
+      - id: withdraw
+        label: |-
+          Operator + CSV(Delta) from this Assert
+          Setup signature: Withdraw
+      - id: disprove
+        label: |-
+          Watchtower + false-output preimage
+          from evaluating GC_i+1,0
+      - id: timestamp_equivocation
+        label: |-
+          Watchtower + conflicting openings
+          T_j != T'_j under the same pk_T,j
+          Epoch j is in this signed history
 ```
 
 ## tx: withdraw
 
 ```bridgeflow
-label: Withdraw — prove chain using earlier signed timestamps
+label: Withdraw (i+1, 0)
+width: 480
 inputs:
-  - tx: setup
+  - tx: assert_next_0
     output: 0
-    spending_path: bound_withdrawal
-    color: payout_binding
-    arrow_label: Adapter enforces joint spend and payout
-  - tx: request_withdrawal
-    output: 0
-    spending_path: deferred_chain_proof
-    color: deferred_proof
-    label: |-
-      Supply complete chain and claim witness
-      or sound proof of the same predicate
-      Invalid proof cannot spend this gate
+    spending_path: withdraw
+    color: timeout_path
+    arrow_label: Delta after Assert
 outputs:
-  - amount: "1.00000000"
-    label: Operator reimbursement
-    spending_paths:
-      - id: operator
-        label: Operator signature
-  - amount: "0.00000330"
-    label: Operator control change
+  - amount: "0.01000000"
+    label: Operator withdraws slot funds
     spending_paths:
       - id: operator
         label: Operator signature
 ```
 
+## tx: disprove_next_0
+
+```bridgeflow
+label: Disprove / Slash (i+1, 0)
+width: 480
+inputs:
+  - tx: assert_next_0
+    output: 0
+    spending_path: disprove
+    color: disprove
+    label: False-output key from GC_i+1,0
+outputs:
+  - amount: "0.01000000"
+    label: Slashed operator funds
+    spending_paths:
+      - id: unspendable
+        label: OP_RETURN — unspendable
+```
+
+## tx: slash_timestamp_next_0
+
+```bridgeflow
+label: SlashTimestamp (i+1, 0)
+width: 480
+inputs:
+  - tx: assert_next_0
+    output: 0
+    spending_path: timestamp_equivocation
+    color: timestamp_equivocation
+    label: |-
+      Two openings for a differing timestamp bit
+      Same operator, domain and epoch key
+outputs:
+  - amount: "0.01000000"
+    label: Slashed operator funds
+    spending_paths:
+      - id: unspendable
+        label: OP_RETURN — unspendable
+```
+
+## tx: assert_next_1
+
+```bridgeflow
+label: Assert (i+1, 1)
+width: 480
+inputs:
+  - tx: fanout_next
+    output: 1
+    spending_path: assert
+    color: garbled_inputs
+    label: |-
+      Lamport proof signature for GC_i+1,1
+      pi covers every timestamp T_0,...,T_i+1
+      Header validity, publication timing and claim
+outputs:
+  - amount: "0.01000000"
+    label: Asserted funds
+    spending_paths:
+      - id: withdraw
+        label: |-
+          Operator + CSV(Delta) from this Assert
+          Setup signature: Withdraw
+      - id: disprove
+        label: |-
+          Watchtower + false-output preimage
+          from evaluating GC_i+1,1
+      - id: timestamp_equivocation
+        label: |-
+          Watchtower + conflicting openings
+          T_j != T'_j under the same pk_T,j
+          Epoch j is in this signed history
+```
+
+## tx: withdraw_next_1
+
+```bridgeflow
+label: Withdraw (i+1, 1)
+width: 480
+inputs:
+  - tx: assert_next_1
+    output: 0
+    spending_path: withdraw
+    color: timeout_path
+    arrow_label: Delta after Assert
+outputs:
+  - amount: "0.01000000"
+    label: Operator withdraws slot funds
+    spending_paths:
+      - id: operator
+        label: Operator signature
+```
+
+## tx: disprove_next_1
+
+```bridgeflow
+label: Disprove / Slash (i+1, 1)
+width: 480
+inputs:
+  - tx: assert_next_1
+    output: 0
+    spending_path: disprove
+    color: disprove
+    label: False-output key from GC_i+1,1
+outputs:
+  - amount: "0.01000000"
+    label: Slashed operator funds
+    spending_paths:
+      - id: unspendable
+        label: OP_RETURN — unspendable
+```
+
+## tx: slash_timestamp_next_1
+
+```bridgeflow
+label: SlashTimestamp (i+1, 1)
+width: 480
+inputs:
+  - tx: assert_next_1
+    output: 0
+    spending_path: timestamp_equivocation
+    color: timestamp_equivocation
+    label: |-
+      Two openings for a differing timestamp bit
+      Same operator, domain and epoch key
+outputs:
+  - amount: "0.01000000"
+    label: Slashed operator funds
+    spending_paths:
+      - id: unspendable
+        label: OP_RETURN — unspendable
+```
+
 <!-- bridgeflow:layout
 txs:
-  request_withdrawal:
-    x: 2092
-    y: 160
+  assert_i_0:
+    x: 1500
+    y: 470
+  assert_i_1:
+    x: 1500
+    y: 1290
+  assert_next_0:
+    x: 1500
+    y: 2420
+  assert_next_1:
+    x: 1500
+    y: 3240
+  disprove_i_0:
+    x: 2220
+    y: 680
+  disprove_i_1:
+    x: 2220
+    y: 1500
+  disprove_next_0:
+    x: 2220
+    y: 2630
+  disprove_next_1:
+    x: 2220
+    y: 3450
+  fanout_i:
+    x: 800
+    y: 650
+  fanout_next:
+    x: 800
+    y: 2600
   setup:
-    x: 89
-    y: 92
-  timeout_first_record:
-    x: 819
-    y: 410
-  timeout_latest_record:
-    x: 2366
-    y: -252
-  timeout_next_record:
-    x: 1624
-    y: 420
+    x: -555
+    y: 619
+  slash_timestamp_i_0:
+    x: 2220
+    y: 950
+  slash_timestamp_i_1:
+    x: 2220
+    y: 1770
+  slash_timestamp_next_0:
+    x: 2220
+    y: 2900
+  slash_timestamp_next_1:
+    x: 2220
+    y: 3720
   timestamp_i:
-    x: 757
-    y: -60
+    x: 100
+    y: 650
   timestamp_next:
-    x: 1401
-    y: -136
-  user_payout:
-    x: 491
-    y: 746
+    x: 100
+    y: 2600
   withdraw:
-    x: 2941
-    y: 475
+    x: 2220
+    y: 2360
+  withdraw_i_0:
+    x: 2220
+    y: 410
+  withdraw_i_1:
+    x: 2220
+    y: 1230
+  withdraw_next_1:
+    x: 2220
+    y: 3180
 -->
