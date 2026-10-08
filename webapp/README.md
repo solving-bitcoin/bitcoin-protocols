@@ -45,6 +45,13 @@ drag a transaction group to move it. **Focus transaction** zooms to a selected
 transaction for reading. A dot on **Save layout** marks unsaved positions.
 External file changes are refreshed from disk without discarding an unsaved layout.
 
+Use **Copy link** while viewing the default workspace to share the current file.
+The address updates as you select files, so you can also copy it from your browser.
+Links such as `?workspace=default&file=primitives%2Fbitvm3-challenge-response.md`
+open the selected file automatically; `?workspace=default` opens the default graph.
+Browser Back and Forward restore the selected file. Sharing supports the bundled
+default workspace, including nested folders.
+
 The development server only accepts layout changes to existing protocol Markdown
 files and refuses to overwrite a file changed since it was opened. Reopen a file
 if a save reports a conflict. Production builds use bundled files and offer
