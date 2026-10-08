@@ -26,6 +26,7 @@ import {
   Folder,
   FolderOpen,
   Home,
+  Link,
   Maximize2,
   PanelLeft,
   Play,
@@ -65,6 +66,12 @@ import {
   type WorkspaceFileEntry,
   type WorkspaceTreeEntry,
 } from "@/lib/workspace"
+import {
+  clearDefaultWorkspaceLink,
+  createDefaultWorkspaceLink,
+  readDefaultWorkspaceLink,
+  type WorkspaceHistoryMode,
+} from "@/lib/workspace-links"
 
 const ExcalidrawCanvas = lazy(async () => {
   const { Excalidraw } = await import("@excalidraw/excalidraw")
@@ -536,6 +543,15 @@ function clampSidebarWidth(width: number) {
   return Math.min(SIDEBAR_MAX_WIDTH, Math.max(SIDEBAR_MIN_WIDTH, width))
 }
 
+function updateWorkspaceUrl(url: URL, mode: WorkspaceHistoryMode) {
+  if (mode === "none" || url.href === window.location.href) return
+  if (mode === "replace") {
+    window.history.replaceState(null, "", url)
+  } else {
+    window.history.pushState(null, "", url)
+  }
+}
+
 function prepareMarkdownForReader(source: string) {
   const sourceWithoutLayout = source.replace(
     BRIDGEFLOW_LAYOUT_BLOCK_PATTERN,
@@ -637,6 +653,7 @@ export function App() {
   const [sidebarWidth, setSidebarWidth] = useState(SIDEBAR_DEFAULT_WIDTH)
   const [mobileFilesOpen, setMobileFilesOpen] = useState(false)
   const [workspaceStatus, setWorkspaceStatus] = useState("")
+  const [shareLink, setShareLink] = useState("")
   const [isSaving, setIsSaving] = useState(false)
   const [hasLayoutChanges, setHasLayoutChanges] = useState(false)
 
@@ -649,6 +666,8 @@ export function App() {
   const workspaceSignatureRef = useRef("")
   const isWritingFileRef = useRef(false)
   const savedLayoutRef = useRef("")
+  const fileOpenRequestRef = useRef(0)
+  const workspaceLoadRequestRef = useRef(0)
   const isMobile = useIsMobile()
 
   const isMarkdownFile = activeFile?.type === "markdown"
@@ -739,16 +758,31 @@ export function App() {
   }, [source])
 
   const openFileEntry = useCallback(
-    async (entry: WorkspaceFileEntry) => {
+    async (
+      entry: WorkspaceFileEntry,
+      historyMode: WorkspaceHistoryMode = "push"
+    ) => {
+      const request = ++fileOpenRequestRef.current
       try {
         const nextSource = await entry.read()
+        if (request !== fileOpenRequestRef.current) return
         sourceRef.current = nextSource
         activeFileRef.current = entry
         setActiveFile(entry)
         setSource(nextSource)
         setSidebarMode("reader")
         setMobileFilesOpen(false)
+        setShareLink("")
         setWorkspaceStatus(`Opened ${entry.name}`)
+        if (workspaceRef.current?.isDefault) {
+          updateWorkspaceUrl(
+            createDefaultWorkspaceLink(
+              new URL(window.location.href),
+              entry.path
+            ),
+            historyMode
+          )
+        }
 
         if (entry.type === "markdown" && isBridgeFlowMarkdown(nextSource)) {
           runCompile(nextSource)
@@ -756,14 +790,21 @@ export function App() {
           applyScene(createEmptySceneState())
         }
       } catch {
-        setWorkspaceStatus(`Could not open ${entry.name}`)
+        if (request === fileOpenRequestRef.current) {
+          setWorkspaceStatus(`Could not open ${entry.name}`)
+        }
       }
     },
     [applyScene, runCompile]
   )
 
   const openWorkspace = useCallback(
-    async (nextWorkspace: Workspace) => {
+    async (
+      nextWorkspace: Workspace,
+      filePath?: string | null,
+      historyMode: WorkspaceHistoryMode = "push"
+    ) => {
+      ++fileOpenRequestRef.current
       setWorkspace(nextWorkspace)
       workspaceRef.current = nextWorkspace
       workspaceSignatureRef.current = getWorkspaceEntriesSignature(
@@ -775,13 +816,25 @@ export function App() {
       activeFileRef.current = null
       sourceRef.current = ""
       setSource("")
+      setShareLink("")
       applyScene(createEmptySceneState())
 
+      if (!nextWorkspace.isDefault) {
+        updateWorkspaceUrl(
+          clearDefaultWorkspaceLink(new URL(window.location.href)),
+          historyMode
+        )
+      }
+
+      const requestedFile = filePath
+        ? findFileByPath(nextWorkspace.entries, filePath)
+        : null
       const preferredGraph = findFileByPath(
         nextWorkspace.entries,
         DEFAULT_BUNDLED_GRAPH_PATH
       )
-      const firstFile = preferredGraph ?? findFirstFile(nextWorkspace.entries)
+      const firstFile =
+        requestedFile ?? preferredGraph ?? findFirstFile(nextWorkspace.entries)
       setWorkspaceStatus(
         firstFile
           ? `Opened ${nextWorkspace.name}`
@@ -789,40 +842,84 @@ export function App() {
       )
 
       if (firstFile) {
-        await openFileEntry(firstFile)
+        await openFileEntry(firstFile, historyMode)
+        if (filePath && !requestedFile) {
+          setWorkspaceStatus(
+            `File not found: ${filePath}. Opened ${firstFile.name}`
+          )
+        }
       }
     },
     [applyScene, openFileEntry]
   )
 
-  const handleLoadDefault = useCallback(async () => {
-    try {
-      await openWorkspace(await createDefaultWorkspace())
-    } catch (error) {
-      setWorkspaceStatus(
-        error instanceof Error
-          ? error.message
-          : "Could not open protocols folder"
-      )
-    }
-  }, [openWorkspace])
-
-  useEffect(() => {
-    if (import.meta.env.DEV) return
-
-    let cancelled = false
-    void createDefaultWorkspace()
-      .then((nextWorkspace) => {
-        if (!cancelled && !workspaceRef.current) {
-          return openWorkspace(nextWorkspace)
+  const handleLoadDefault = useCallback(
+    async (
+      filePath?: string | null,
+      historyMode: WorkspaceHistoryMode = "push"
+    ) => {
+      const request = ++workspaceLoadRequestRef.current
+      ++fileOpenRequestRef.current
+      try {
+        const nextWorkspace = await createDefaultWorkspace()
+        if (request === workspaceLoadRequestRef.current) {
+          await openWorkspace(nextWorkspace, filePath, historyMode)
         }
-      })
-      .catch((error: unknown) => {
-        if (!cancelled) {
+      } catch (error) {
+        if (request === workspaceLoadRequestRef.current) {
           setWorkspaceStatus(
             error instanceof Error
               ? error.message
-              : "Could not open bundled protocols"
+              : "Could not open protocols folder"
+          )
+        }
+      }
+    },
+    [openWorkspace]
+  )
+
+  const resetWorkspace = useCallback(
+    (historyMode: WorkspaceHistoryMode = "push") => {
+      ++workspaceLoadRequestRef.current
+      ++fileOpenRequestRef.current
+      updateWorkspaceUrl(
+        clearDefaultWorkspaceLink(new URL(window.location.href)),
+        historyMode
+      )
+      setWorkspace(null)
+      workspaceRef.current = null
+      workspaceSignatureRef.current = ""
+      setActiveFile(null)
+      setSidebarMode("files")
+      activeFileRef.current = null
+      sourceRef.current = ""
+      setSource("")
+      setShareLink("")
+      setWorkspaceStatus("")
+      setMobileFilesOpen(false)
+      applyScene(createEmptySceneState())
+    },
+    [applyScene]
+  )
+
+  useEffect(() => {
+    const selection = readDefaultWorkspaceLink(new URL(window.location.href))
+    if (import.meta.env.DEV && !selection) return
+
+    const request = ++workspaceLoadRequestRef.current
+    let cancelled = false
+    void createDefaultWorkspace()
+      .then((nextWorkspace) => {
+        if (!cancelled && request === workspaceLoadRequestRef.current) {
+          return openWorkspace(nextWorkspace, selection?.filePath, "replace")
+        }
+      })
+      .catch((error: unknown) => {
+        if (!cancelled && request === workspaceLoadRequestRef.current) {
+          setWorkspaceStatus(
+            error instanceof Error
+              ? error.message
+              : "Could not open protocols folder"
           )
         }
       })
@@ -831,6 +928,34 @@ export function App() {
       cancelled = true
     }
   }, [openWorkspace])
+
+  useEffect(() => {
+    const onPopState = () => {
+      const selection = readDefaultWorkspaceLink(new URL(window.location.href))
+      if (selection) {
+        void handleLoadDefault(selection.filePath, "none")
+      } else {
+        resetWorkspace("none")
+      }
+    }
+    window.addEventListener("popstate", onPopState)
+    return () => window.removeEventListener("popstate", onPopState)
+  }, [handleLoadDefault, resetWorkspace])
+
+  const handleCopyLink = useCallback(async () => {
+    if (!workspaceRef.current?.isDefault) return
+    const url = createDefaultWorkspaceLink(
+      new URL(window.location.href),
+      activeFileRef.current?.path
+    ).href
+    try {
+      await navigator.clipboard.writeText(url)
+      setWorkspaceStatus("Link copied")
+    } catch {
+      setShareLink(url)
+      setWorkspaceStatus("Copy the link below")
+    }
+  }, [])
 
   const handleDownloadDefaultZip = useCallback(async () => {
     try {
@@ -851,6 +976,7 @@ export function App() {
   }, [])
 
   const handleOpenFolder = useCallback(async () => {
+    const request = ++workspaceLoadRequestRef.current
     try {
       const picker = (window as unknown as DirectoryPickerWindow)
         .showDirectoryPicker
@@ -860,11 +986,13 @@ export function App() {
       }
 
       const directoryHandle = await picker({ mode: "readwrite" })
+      const entries = await readDirectoryWorkspace(directoryHandle)
+      if (request !== workspaceLoadRequestRef.current) return
       await openWorkspace({
         name: directoryHandle.name,
         readonly: false,
         rootHandle: directoryHandle,
-        entries: await readDirectoryWorkspace(directoryHandle),
+        entries,
       })
     } catch {
       setWorkspaceStatus("Folder was not opened")
@@ -1176,7 +1304,7 @@ export function App() {
         <FileTree
           entries={workspace.entries}
           activePath={activeFile?.path}
-          onOpenFile={openFileEntry}
+          onOpenFile={(entry) => void openFileEntry(entry)}
         />
       </div>
     </>
@@ -1239,7 +1367,7 @@ export function App() {
               type="button"
               size="lg"
               variant="outline"
-              onClick={handleLoadDefault}
+              onClick={() => void handleLoadDefault()}
               className="justify-start"
             >
               <Folder data-icon="inline-start" />
@@ -1331,7 +1459,7 @@ export function App() {
               <FileTree
                 entries={workspace.entries}
                 activePath={activeFile?.path}
-                onOpenFile={openFileEntry}
+                onOpenFile={(entry) => void openFileEntry(entry)}
               />
             </div>
           </aside>
@@ -1339,7 +1467,7 @@ export function App() {
       ) : null}
 
       <section className="flex min-w-0 flex-1 flex-col">
-        <header className="flex shrink-0 flex-col gap-2 border-b border-border bg-card px-3 py-2 md:h-12 md:flex-row md:items-center md:justify-between md:py-0">
+        <header className="flex shrink-0 flex-col gap-2 border-b border-border bg-card px-3 py-2 xl:h-12 xl:flex-row xl:items-center xl:justify-between xl:py-0">
           <div className="flex min-w-0 items-center gap-2 md:gap-3">
             <Button
               type="button"
@@ -1371,7 +1499,7 @@ export function App() {
             </div>
           </div>
 
-          <div className="mobile-action-bar -mx-1 flex min-w-0 items-center gap-2 overflow-x-auto px-1 pb-1 md:mx-0 md:shrink-0 md:overflow-visible md:px-0 md:pb-0">
+          <div className="mobile-action-bar -mx-1 flex min-w-0 items-center gap-2 overflow-x-auto px-1 pb-1 xl:mx-0 xl:shrink-0 xl:overflow-visible xl:px-0 xl:pb-0">
             {isGraphMarkdown ? (
               <>
                 <Button
@@ -1381,7 +1509,7 @@ export function App() {
                   onClick={handleRender}
                 >
                   <Play data-icon="inline-start" />
-                  <span className="hidden sm:inline">Render</span>
+                  <span className="hidden 2xl:inline">Render</span>
                 </Button>
                 <Button
                   type="button"
@@ -1395,7 +1523,7 @@ export function App() {
                   }}
                 >
                   <Maximize2 data-icon="inline-start" />
-                  <span className="hidden sm:inline">Fit</span>
+                  <span className="hidden 2xl:inline">Fit</span>
                 </Button>
                 <Badge
                   variant={errorState ? "destructive" : "secondary"}
@@ -1442,7 +1570,7 @@ export function App() {
                   onClick={handleCopySceneConfig}
                 >
                   <ClipboardCopy data-icon="inline-start" />
-                  <span className="hidden sm:inline">Copy scene</span>
+                  <span className="hidden 2xl:inline">Copy scene</span>
                 </Button>
                 <Button
                   type="button"
@@ -1454,7 +1582,7 @@ export function App() {
                   disabled={!canSaveLayout}
                 >
                   <Save data-icon="inline-start" />
-                  <span className="hidden sm:inline">
+                  <span className="hidden 2xl:inline">
                     {isSaving
                       ? "Saving…"
                       : activeFile?.write
@@ -1467,6 +1595,19 @@ export function App() {
                 </Button>
               </>
             ) : null}
+            {workspace.isDefault ? (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                aria-label="Copy link"
+                title="Copy link"
+                onClick={handleCopyLink}
+              >
+                <Link data-icon="inline-start" />
+                <span className="hidden sm:inline">Copy link</span>
+              </Button>
+            ) : null}
             <Button
               type="button"
               variant="outline"
@@ -1475,30 +1616,41 @@ export function App() {
               onClick={handleOpenFolder}
             >
               <FolderOpen data-icon="inline-start" />
-              <span className="hidden sm:inline">Folder</span>
+              <span className="hidden 2xl:inline">Folder</span>
             </Button>
             <Button
               type="button"
               variant="ghost"
               size="icon-sm"
               aria-label="Go home"
-              onClick={() => {
-                setWorkspace(null)
-                workspaceRef.current = null
-                workspaceSignatureRef.current = ""
-                setActiveFile(null)
-                setSidebarMode("files")
-                activeFileRef.current = null
-                sourceRef.current = ""
-                setSource("")
-                setMobileFilesOpen(false)
-                applyScene(createEmptySceneState())
-              }}
+              onClick={() => resetWorkspace()}
             >
               <Home />
             </Button>
           </div>
         </header>
+
+        {shareLink ? (
+          <div className="flex shrink-0 items-center gap-2 border-b border-border bg-card px-3 py-2">
+            <input
+              aria-label="Share link"
+              className="min-w-0 flex-1 rounded-md border border-input bg-background px-2 py-1 text-sm"
+              value={shareLink}
+              readOnly
+              autoFocus
+              onFocus={(event) => event.currentTarget.select()}
+            />
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-sm"
+              aria-label="Close share link"
+              onClick={() => setShareLink("")}
+            >
+              <X />
+            </Button>
+          </div>
+        ) : null}
 
         {sceneDiagnostics.length > 0 && isGraphMarkdown ? (
           <div className="flex max-h-24 shrink-0 flex-col gap-1 overflow-auto border-b border-border bg-muted/40 px-3 py-2 text-xs">
