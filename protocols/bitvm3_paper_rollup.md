@@ -410,8 +410,8 @@ outputs:
 <!-- bridgeflow:layout
 txs:
   assert_funding:
-    x: 1050
-    y: 520
+    x: 1013
+    y: 639
   assert_tx:
     x: 1850
     y: 680
