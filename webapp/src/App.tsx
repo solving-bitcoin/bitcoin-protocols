@@ -53,7 +53,6 @@ import {
 import {
   createDefaultWorkspace,
   createDefaultWorkspaceZipBlob,
-  DEFAULT_BUNDLED_GRAPH_PATH,
   DEFAULT_WORKSPACE_ZIP_NAME,
   findFileByPath,
   findFirstFile,
@@ -763,7 +762,7 @@ export function App() {
   )
 
   const openWorkspace = useCallback(
-    async (nextWorkspace: Workspace) => {
+    (nextWorkspace: Workspace) => {
       setWorkspace(nextWorkspace)
       workspaceRef.current = nextWorkspace
       workspaceSignatureRef.current = getWorkspaceEntriesSignature(
@@ -771,33 +770,25 @@ export function App() {
       )
       setSidebarCollapsed(false)
       setSidebarMode("files")
+      setMobileFilesOpen(true)
       setActiveFile(null)
       activeFileRef.current = null
       sourceRef.current = ""
       setSource("")
       applyScene(createEmptySceneState())
 
-      const preferredGraph = findFileByPath(
-        nextWorkspace.entries,
-        DEFAULT_BUNDLED_GRAPH_PATH
-      )
-      const firstFile = preferredGraph ?? findFirstFile(nextWorkspace.entries)
       setWorkspaceStatus(
-        firstFile
+        findFirstFile(nextWorkspace.entries)
           ? `Opened ${nextWorkspace.name}`
           : `${nextWorkspace.name} has no files`
       )
-
-      if (firstFile) {
-        await openFileEntry(firstFile)
-      }
     },
-    [applyScene, openFileEntry]
+    [applyScene]
   )
 
   const handleLoadDefault = useCallback(async () => {
     try {
-      await openWorkspace(await createDefaultWorkspace())
+      openWorkspace(await createDefaultWorkspace())
     } catch (error) {
       setWorkspaceStatus(
         error instanceof Error
@@ -860,7 +851,7 @@ export function App() {
       }
 
       const directoryHandle = await picker({ mode: "readwrite" })
-      await openWorkspace({
+      openWorkspace({
         name: directoryHandle.name,
         readonly: false,
         rootHandle: directoryHandle,

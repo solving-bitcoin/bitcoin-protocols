@@ -83,9 +83,6 @@ export function sortWorkspaceEntries(entries: WorkspaceTreeEntry[]) {
   })
 }
 
-/** When present in the tree, this BridgeFlow Markdown opens first after Load default. */
-export const DEFAULT_BUNDLED_GRAPH_PATH = "clementine-v2.md"
-
 const bridgeDesignsRawModules = import.meta.glob("../../../protocols/**/*", {
   query: "?raw",
   import: "default",
