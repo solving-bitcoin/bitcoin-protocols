@@ -11,7 +11,7 @@ Relay-policy, mining, and cryptographic assumptions alone do not require a
 separate folder. Keep descriptions, sources, and all assumptions in each
 protocol or primitive's own Markdown file; do not add new documentation READMEs.
 
-The [`webapp/`](webapp/) folder contains BridgeFlow, the React visualiser for these protocol files.
+The [`webapp/`](webapp/) folder contains BridgeFlow, the React visualiser for these protocol files. The published site is [https://solving-bitcoin.github.io/bitcoin-protocols/](https://solving-bitcoin.github.io/bitcoin-protocols/).
 
 ```bash
 cd webapp
