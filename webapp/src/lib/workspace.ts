@@ -30,6 +30,7 @@ export interface DirectoryPickerWindow extends Window {
 export interface Workspace {
   name: string
   readonly: boolean
+  isDefault?: boolean
   entries: WorkspaceTreeEntry[]
   rootHandle?: AppDirectoryHandle
   refresh?: () => Promise<WorkspaceTreeEntry[]>
@@ -618,6 +619,7 @@ export async function createDefaultWorkspace(): Promise<Workspace> {
     return {
       name: "protocols",
       readonly: false,
+      isDefault: true,
       entries: await loadLocalProtocolEntries(),
       refresh: loadLocalProtocolEntries,
     }
@@ -625,6 +627,7 @@ export async function createDefaultWorkspace(): Promise<Workspace> {
   return {
     name: "protocols",
     readonly: true,
+    isDefault: true,
     entries: await loadBundledBridgeDesignEntries(),
   }
 }
