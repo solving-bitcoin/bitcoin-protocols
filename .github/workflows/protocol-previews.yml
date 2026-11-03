@@ -1,0 +1,44 @@
+name: Comment protocol previews
+
+on:
+  pull_request_target:
+    types: [opened, synchronize, reopened, edited]
+  workflow_dispatch:
+    inputs:
+      pull_request:
+        description: Pull request number to refresh
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  pull-requests: write
+
+concurrency:
+  group: protocol-preview-${{ github.event.pull_request.number || inputs.pull_request }}
+  cancel-in-progress: false
+
+jobs:
+  comment:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout trusted main scripts
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          persist-credentials: false
+
+      - name: Update protocol links
+        uses: actions/github-script@v7
+        env:
+          PROTOCOL_SITE_URL: ${{ vars.PROTOCOL_SITE_URL }}
+        with:
+          script: |
+            const { updateProtocolComment } = require('./.github/scripts/protocol-preview.cjs')
+            await updateProtocolComment({
+              github,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              number: Number(context.payload.pull_request?.number ?? context.payload.inputs?.pull_request),
+              siteUrl: process.env.PROTOCOL_SITE_URL || `https://${context.repo.owner}.github.io/${context.repo.repo}/`,
+            })

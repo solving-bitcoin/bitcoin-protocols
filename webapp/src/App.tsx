@@ -71,6 +71,7 @@ import {
   readDefaultWorkspaceLink,
   type WorkspaceHistoryMode,
 } from "@/lib/workspace-links"
+import { createPullRequestWorkspace } from "@/lib/github-workspace"
 
 const ExcalidrawCanvas = lazy(async () => {
   const { Excalidraw } = await import("@excalidraw/excalidraw")
@@ -653,6 +654,7 @@ export function App() {
   const [mobileFilesOpen, setMobileFilesOpen] = useState(false)
   const [workspaceStatus, setWorkspaceStatus] = useState("")
   const [shareLink, setShareLink] = useState("")
+  const [pullRequestInput, setPullRequestInput] = useState("")
   const [isSaving, setIsSaving] = useState(false)
   const [hasLayoutChanges, setHasLayoutChanges] = useState(false)
 
@@ -777,7 +779,8 @@ export function App() {
           updateWorkspaceUrl(
             createDefaultWorkspaceLink(
               new URL(window.location.href),
-              entry.path
+              entry.path,
+              workspaceRef.current.pullRequest?.number
             ),
             historyMode
           )
@@ -788,9 +791,13 @@ export function App() {
         } else {
           applyScene(createEmptySceneState())
         }
-      } catch {
+      } catch (error) {
         if (request === fileOpenRequestRef.current) {
-          setWorkspaceStatus(`Could not open ${entry.name}`)
+          setWorkspaceStatus(
+            error instanceof Error
+              ? error.message
+              : `Could not open ${entry.name}`
+          )
         }
       }
     },
@@ -819,12 +826,16 @@ export function App() {
       setShareLink("")
       applyScene(createEmptySceneState())
 
-      if (!nextWorkspace.isDefault) {
-        updateWorkspaceUrl(
-          clearDefaultWorkspaceLink(new URL(window.location.href)),
-          historyMode
-        )
-      }
+      updateWorkspaceUrl(
+        nextWorkspace.isDefault
+          ? createDefaultWorkspaceLink(
+              new URL(window.location.href),
+              filePath,
+              nextWorkspace.pullRequest?.number
+            )
+          : clearDefaultWorkspaceLink(new URL(window.location.href)),
+        historyMode
+      )
 
       const requestedFile = filePath
         ? findFileByPath(nextWorkspace.entries, filePath)
@@ -838,7 +849,9 @@ export function App() {
       if (requestedFile) {
         await openFileEntry(requestedFile, historyMode)
       } else if (filePath) {
-        setWorkspaceStatus(`File not found: ${filePath}. Select a file from the sidebar.`)
+        setWorkspaceStatus(
+          `File not found: ${filePath}. Select a file from the sidebar.`
+        )
       }
     },
     [applyScene, openFileEntry]
@@ -847,12 +860,29 @@ export function App() {
   const handleLoadDefault = useCallback(
     async (
       filePath?: string | null,
-      historyMode: WorkspaceHistoryMode = "push"
+      historyMode: WorkspaceHistoryMode = "push",
+      pullRequest?: string | null
     ) => {
       const request = ++workspaceLoadRequestRef.current
       ++fileOpenRequestRef.current
+      setWorkspace(null)
+      workspaceRef.current = null
+      setActiveFile(null)
+      activeFileRef.current = null
+      setSource("")
+      sourceRef.current = ""
+      setShareLink("")
+      applyScene(createEmptySceneState())
+      setWorkspaceStatus(
+        pullRequest != null
+          ? `Loading PR #${pullRequest}…`
+          : "Loading protocols…"
+      )
       try {
-        const nextWorkspace = await createDefaultWorkspace()
+        const nextWorkspace =
+          pullRequest != null
+            ? await createPullRequestWorkspace(pullRequest)
+            : await createDefaultWorkspace()
         if (request === workspaceLoadRequestRef.current) {
           await openWorkspace(nextWorkspace, filePath, historyMode)
         }
@@ -866,7 +896,7 @@ export function App() {
         }
       }
     },
-    [openWorkspace]
+    [applyScene, openWorkspace]
   )
 
   const resetWorkspace = useCallback(
@@ -897,34 +927,37 @@ export function App() {
     const selection = readDefaultWorkspaceLink(new URL(window.location.href))
     if (import.meta.env.DEV && !selection) return
 
-    const request = ++workspaceLoadRequestRef.current
     let cancelled = false
-    void createDefaultWorkspace()
-      .then((nextWorkspace) => {
-        if (!cancelled && request === workspaceLoadRequestRef.current) {
-          return openWorkspace(nextWorkspace, selection?.filePath, "replace")
-        }
-      })
-      .catch((error: unknown) => {
-        if (!cancelled && request === workspaceLoadRequestRef.current) {
-          setWorkspaceStatus(
-            error instanceof Error
-              ? error.message
-              : "Could not open protocols folder"
-          )
-        }
-      })
+    const workspaceRequests = workspaceLoadRequestRef
+    const fileRequests = fileOpenRequestRef
+    void Promise.resolve().then(() => {
+      if (!cancelled) {
+        return handleLoadDefault(
+          selection?.filePath,
+          "replace",
+          selection?.pullRequest
+        )
+      }
+    })
 
     return () => {
       cancelled = true
+      ++workspaceRequests.current
+      ++fileRequests.current
     }
-  }, [openWorkspace])
+  }, [handleLoadDefault])
 
   useEffect(() => {
     const onPopState = () => {
       const selection = readDefaultWorkspaceLink(new URL(window.location.href))
       if (selection) {
-        void handleLoadDefault(selection.filePath, "none")
+        void handleLoadDefault(
+          selection.filePath,
+          "none",
+          selection.pullRequest
+        )
+      } else if (!import.meta.env.DEV) {
+        void handleLoadDefault(undefined, "none")
       } else {
         resetWorkspace("none")
       }
@@ -937,7 +970,8 @@ export function App() {
     if (!workspaceRef.current?.isDefault) return
     const url = createDefaultWorkspaceLink(
       new URL(window.location.href),
-      activeFileRef.current?.path
+      activeFileRef.current?.path,
+      workspaceRef.current.pullRequest?.number
     ).href
     try {
       await navigator.clipboard.writeText(url)
@@ -1287,7 +1321,11 @@ export function App() {
         <div className="min-w-0">
           <div className="truncate text-sm font-medium">{workspace.name}</div>
           <div className="text-xs text-muted-foreground">
-            {workspace.readonly ? "Bundled folder" : "Local folder"}
+            {workspace.pullRequest
+              ? "PR preview · read only"
+              : workspace.readonly
+                ? "Main protocols"
+                : "Local folder"}
           </div>
         </div>
       </div>
@@ -1327,6 +1365,51 @@ export function App() {
         </div>
       </div>
     </div>
+  )
+
+  const protocolNavigation = (
+    <form
+      className="flex flex-wrap items-center gap-2"
+      aria-label="Choose protocol revision"
+      onSubmit={(event) => {
+        event.preventDefault()
+        void handleLoadDefault(undefined, "push", pullRequestInput.trim())
+      }}
+    >
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        onClick={() => void handleLoadDefault()}
+      >
+        {import.meta.env.DEV ? "Local protocols" : "Main protocols"}
+      </Button>
+      <input
+        aria-label="Pull request number"
+        className="h-8 w-24 rounded-md border border-input bg-background px-2 text-sm"
+        inputMode="numeric"
+        pattern="[1-9][0-9]*"
+        placeholder="PR #"
+        required
+        value={pullRequestInput}
+        onChange={(event) => setPullRequestInput(event.currentTarget.value)}
+      />
+      <Button type="submit" variant="outline" size="sm">
+        Open PR
+      </Button>
+      {workspace?.pullRequest ? (
+        <a
+          href={workspace.pullRequest.url}
+          target="_blank"
+          rel="noreferrer"
+          className="text-sm underline"
+          title={workspace.pullRequest.title}
+        >
+          PR #{workspace.pullRequest.number} ·{" "}
+          {workspace.pullRequest.sha.slice(0, 7)}
+        </a>
+      ) : null}
+    </form>
   )
 
   if (!workspace) {
@@ -1369,6 +1452,7 @@ export function App() {
                 ? "Opens protocols/ from this repository. Save layout writes directly to its Markdown files."
                 : "Opens the bundled protocols. Download layout saves a Markdown copy with your changes."}
             </p>
+            {protocolNavigation}
             <Button
               type="button"
               size="lg"
@@ -1433,7 +1517,11 @@ export function App() {
                   {workspace.name}
                 </div>
                 <div className="text-xs text-muted-foreground">
-                  {workspace.readonly ? "Bundled folder" : "Local folder"}
+                  {workspace.pullRequest
+                    ? "PR preview · read only"
+                    : workspace.readonly
+                      ? "Main protocols"
+                      : "Local folder"}
                 </div>
               </div>
               <Button
@@ -1620,6 +1708,10 @@ export function App() {
             </Button>
           </div>
         </header>
+
+        <div className="shrink-0 border-b border-border bg-card px-3 py-2">
+          {protocolNavigation}
+        </div>
 
         {shareLink ? (
           <div className="flex shrink-0 items-center gap-2 border-b border-border bg-card px-3 py-2">

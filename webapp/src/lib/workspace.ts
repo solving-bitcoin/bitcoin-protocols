@@ -31,6 +31,7 @@ export interface Workspace {
   name: string
   readonly: boolean
   isDefault?: boolean
+  pullRequest?: { number: number; title: string; url: string; sha: string }
   entries: WorkspaceTreeEntry[]
   rootHandle?: AppDirectoryHandle
   refresh?: () => Promise<WorkspaceTreeEntry[]>
