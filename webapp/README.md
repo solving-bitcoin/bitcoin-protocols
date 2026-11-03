@@ -48,7 +48,7 @@ External file changes are refreshed from disk without discarding an unsaved layo
 Use **Copy link** while viewing the default workspace to share the current file.
 The address updates as you select files, so you can also copy it from your browser.
 Links such as `?workspace=default&file=primitives%2Fbitvm3-challenge-response.md`
-open the selected file automatically; `?workspace=default` opens the default graph.
+open the selected file automatically; `?workspace=default` opens the protocol file browser.
 Browser Back and Forward restore the selected file. Sharing supports the bundled
 default workspace, including nested folders.
 

@@ -54,7 +54,6 @@ import {
 import {
   createDefaultWorkspace,
   createDefaultWorkspaceZipBlob,
-  DEFAULT_BUNDLED_GRAPH_PATH,
   DEFAULT_WORKSPACE_ZIP_NAME,
   findFileByPath,
   findFirstFile,
@@ -812,6 +811,7 @@ export function App() {
       )
       setSidebarCollapsed(false)
       setSidebarMode("files")
+      setMobileFilesOpen(true)
       setActiveFile(null)
       activeFileRef.current = null
       sourceRef.current = ""
@@ -829,25 +829,16 @@ export function App() {
       const requestedFile = filePath
         ? findFileByPath(nextWorkspace.entries, filePath)
         : null
-      const preferredGraph = findFileByPath(
-        nextWorkspace.entries,
-        DEFAULT_BUNDLED_GRAPH_PATH
-      )
-      const firstFile =
-        requestedFile ?? preferredGraph ?? findFirstFile(nextWorkspace.entries)
       setWorkspaceStatus(
-        firstFile
+        findFirstFile(nextWorkspace.entries)
           ? `Opened ${nextWorkspace.name}`
           : `${nextWorkspace.name} has no files`
       )
 
-      if (firstFile) {
-        await openFileEntry(firstFile, historyMode)
-        if (filePath && !requestedFile) {
-          setWorkspaceStatus(
-            `File not found: ${filePath}. Opened ${firstFile.name}`
-          )
-        }
+      if (requestedFile) {
+        await openFileEntry(requestedFile, historyMode)
+      } else if (filePath) {
+        setWorkspaceStatus(`File not found: ${filePath}. Select a file from the sidebar.`)
       }
     },
     [applyScene, openFileEntry]

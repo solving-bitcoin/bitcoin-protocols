@@ -6,14 +6,75 @@ The operator advances a checkpoint chain with garbled header-chain proofs and ti
 
 Source: [BitVM3: Efficient Bitcoin Bridges via Garbled Circuits](https://eprint.iacr.org/2026/933.pdf)
 
+## Actors
+
+| Actor | Role |
+| --- | --- |
+| User | Deposits BTC through the deposit swap. To withdraw, burns wBTC on the rollup and embeds a presigned PegOut fixing the Bitcoin recipient and amount. |
+| N-of-N signers | Verify each operator's garbled setup and transaction templates, sign Deposit, and presign the permitted Withdraw transactions before deleting the reserve signing keys. |
+| Operator | Maintains a Bitcoin checkpoint chain, fronts the user's PegOut, proves the rollup burn and Bitcoin payout in Assert, and receives reimbursement through Withdraw. |
+| Challenger | Monitors checkpoints and reimbursement claims, evaluates the published garbled circuits, and spends invalid claims or expired checkpoint connectors. Challenging is permissionless. |
+
+## Protocol phases
+
+| Phase | Protocol action |
+| --- | --- |
+| Setup | Each operator prepares its light-client checkpoint instances and a shared reimbursement verifier. The N-of-N signers verify the garbling, signature-encoding keys, and transaction templates. The garbled circuits are published for permissionless challengers. |
+| Deposit | The user posts Request. All N signers sign Deposit and presign its permitted Withdraw alternatives for the prepared operators and checkpoints. After registration on the rollup, Deposit can be broadcast; wBTC is minted after the cancellation window if no cancellation secret is relayed. |
+| Withdrawal | The user burns wBTC with a presigned PegOut. An operator adds its funds and pays the user, then uses a checkpoint covering both the burn and payout. After that checkpoint's dispute window, it posts Assert. Challengers can disprove an invalid proof or punish checkpoint equivocation; otherwise, after another dispute window, Withdraw reimburses the operator. |
+
+## Protocol parameters
+
+| Parameter | Meaning |
+| --- | --- |
+| **N** | Number of N-of-N signers. |
+| **M** | Number of registered operators with prepared reimbursement paths. |
+| `num_checkpoints` | Total number of prepared checkpoint epochs per operator, including the initial instance. Bitcoin difficulty epochs contain 2,016 blocks. |
+| `num_reimburse_connectors` | Number of claim connectors per operator and checkpoint, excluding the connector used to advance the checkpoint chain. |
+| `num_signed_reimburse_connectors` | Number of those claim connectors authorized for a particular deposit, operator, and checkpoint through a presigned Deposit–Assert withdrawal pair. |
+| `u` | Deposit / withdrawal denomination in BTC; the operator pays `u − f_O`, where `f_O` is its fee. |
+| `Delta` | Dispute / cancellation delay, written as Δ below. It remains symbolic in the paper and graph. |
+| `k`, `m_t` | Bitcoin confirmation-depth and timestamp-convergence margins used in checkpoint deadlines. |
+
+## Trust assumptions
+
+| Property | Assumption |
+| --- | --- |
+| Safety | Correct committee setup and verified garbling; at least **1 of N signers** authorizes only the permitted transaction pairs and honestly deletes its signing key; at least **one honest challenger** can monitor and dispute within the deadlines. Bitcoin and the rollup must remain secure, and the SNARK and signature / garbling schemes must satisfy their security assumptions. |
+| Deposit liveness | **All N signers** must be online and willing to sign Deposit and its reimbursement alternatives. One unavailable signer can stall deposit acceptance. The rollup must process registration and minting after the cancellation window. |
+| Withdrawal liveness | At least **1 of M operators** is honest, has liquidity to front the payout, and maintains a usable checkpoint chain with an available, presigned reimbursement connector. Bitcoin and the rollup must include valid transactions within the assumed delays. |
+
+The paper assumes honest committee setup, then uses one honest signer's key deletion to prevent new reserve-spending transactions. The challenger's role is independent: an invalid garbled proof reveals a false-output label that blocks reimbursement, while conflicting checkpoint signatures or missed checkpoint deadlines provide other ways to invalidate the operator's path.
+
+The Bitcoin light client checks each epoch's header chain and difficulty adjustment. Timestamp locks prevent an operator from advancing with arbitrarily future-dated checkpoints to lower its private fork's difficulty; a missed deadline lets a challenger burn the checkpoint connector. Its security depends on Bitcoin's common-prefix, chain-quality, and chain-growth properties, with `k` and `m_t` chosen for those assumptions. See [Sections 5 and 7.2 and Appendix D](https://eprint.iacr.org/2026/933.pdf).
+
+## Off-chain resources
+
+| Phase | Resources |
+| --- | --- |
+| Setup | `M × num_checkpoints` light-client garbled setups + `M` shared reimbursement garbled setups, with their signature-encoding artifacts. Preparing all claim slots also requires `M × num_checkpoints × num_reimburse_connectors` Assert–Withdraw template pairs. |
+| Deposit | `N × (1 + M × num_checkpoints × num_signed_reimburse_connectors)` signatures per deposit across all signers: one Deposit signature per signer plus the Withdraw presignatures. Per signer, the count is `1 + M × num_checkpoints × num_signed_reimburse_connectors`. |
+
+Challengers use the published circuits; additional challengers do not require additional garbled setups. A deposit can use only the connectors covered by its presigned Withdraw alternatives. These counts describe the paper's shared-circuit design in [Section 6.3 and Figure 15](https://eprint.iacr.org/2026/933.pdf); setup verification may generate additional candidate garblings, depending on the chosen verification method.
+
+## Throughput and capacity
+
+Each operator prepares `num_reimburse_connectors` claim slots per checkpoint epoch. An epoch spans **2,016 Bitcoin blocks**, nominally **14 days**. If every slot is usable and has a matching deposit authorization, its prepared reimbursement capacity is `num_reimburse_connectors × u` BTC per epoch, averaging `num_reimburse_connectors × u / 14` BTC per day. For example, 100 connectors and a 10 BTC denomination provide **100 reimbursements**, or **1,000 BTC per epoch**, averaging about **71 BTC per day per operator**. Claims can proceed in parallel through different connectors.
+
+The user receives BTC when PegOut confirms; the operator is reimbursed later. It must wait for a checkpoint covering the burn and payout, then Δ before Assert and another Δ before Withdraw. Invalidating a checkpoint or missing its advancement deadline can disable that operator's remaining checkpoint chain. A disproof of an individual Assert consumes that claim's connector without spending the reserve.
+
+An operator's maximum prepared claim capacity is `num_checkpoints × num_reimburse_connectors`. With 100 checkpoints and 100 claim connectors each, that is **10,000 reimbursement slots**, or **100,000 BTC** at a 10 BTC denomination, over roughly **3.8 years**. A particular deposit is eligible only for its presigned subset, and its reserve UTXO can be spent once. Multiple operators and checkpoint alternatives therefore do not multiply the BTC held in the reserve. Effective throughput also depends on operator liquidity, proof generation, and Bitcoin transaction capacity.
+
+## Caveats and open questions
+
+- The checkpoint chain has a finite prepared lifetime. Continued operation needs a new setup before its checkpoint instances are exhausted.
+- The graph's zero-value spendable connectors are schematic; concrete funding amounts and fees must satisfy Bitcoin's relay policy.
+- The paper shares a reimbursement circuit across claims, while its Lamport encoding example is one-time. The concrete encoding scheme must support that reuse without exposing incompatible input labels.
+
 ```bridgeflow
 color_groups:
-  committee_presignature: blue
-  operator_signature: green
-  user_signature: teal
-  secret_reveal: purple
-  permissionless_challenge: red
-  timeout_path: orange
+  nofn_presignature: blue
+  user_presignature: red
 ```
 
 ## tx: request
@@ -45,7 +106,7 @@ inputs:
     output: 0
     spending_path: committee_deposit
     sighash_flag: sighash_all
-    color: committee_presignature
+    color: nofn_presignature
 outputs:
   - amount: u
     label: Bridge reserve
@@ -66,7 +127,6 @@ inputs:
     output: 0
     spending_path: cancel_secret
     arrow_label: relay s_a to abort mint
-    color: secret_reveal
 outputs:
   - amount: u
     label: Refund (schematic)
@@ -114,7 +174,7 @@ inputs:
     output: 0
     spending_path: user
     sighash_flag: sighash_single|anyonecanpay
-    color: user_signature
+    color: user_presignature
     arrow_label: template embedded in rollup Burn
   - label: operator supplies payout funds
 outputs:
@@ -178,7 +238,6 @@ inputs:
   - tx: checkpoint_i
     output: 0
     spending_path: advance_checkpoint
-    color: operator_signature
     arrow_label: timestamp-bound advance
     label: |-
       header-chain proof
@@ -226,7 +285,6 @@ inputs:
   - tx: checkpoint_i
     output: 0
     spending_path: checkpoint_disprove
-    color: permissionless_challenge
 outputs: []
 ```
 
@@ -238,8 +296,7 @@ inputs:
   - tx: checkpoint_i
     output: 0
     spending_path: checkpoint_deadline
-    color: timeout_path
-    arrow_label: CLTV(i * 2016 + k + m_t)
+    arrow_label: "height i × 2016 + k + m_t"
 outputs: []
 ```
 
@@ -251,7 +308,6 @@ inputs:
   - tx: checkpoint_i
     output: 1
     spending_path: checkpoint_disprove
-    color: permissionless_challenge
 outputs: []
 ```
 
@@ -263,8 +319,7 @@ inputs:
   - tx: checkpoint_i
     output: 1
     spending_path: checkpoint_deadline
-    color: timeout_path
-    arrow_label: CLTV(i * 2016 + k + m_t)
+    arrow_label: "height i × 2016 + k + m_t"
 outputs: []
 ```
 
@@ -276,7 +331,6 @@ inputs:
   - tx: assert_funding
     output: 0
     spending_path: garbled_signature
-    color: operator_signature
     label: |-
       SNARK relative to H(B_i):
       rollup Burn + matching Bitcoin PegOut
@@ -284,10 +338,7 @@ inputs:
   - tx: checkpoint_i
     output: 1
     spending_path: assert_gate
-    color: operator_signature
-    arrow_label: |-
-      after Delta from Checkpoint i
-      reuse checkpoint signature; equal hashes
+    arrow_label: "Δ"
 outputs:
   - amount: "*"
     label: Reimbursement connector
@@ -313,7 +364,6 @@ inputs:
   - tx: assert_tx
     output: 0
     spending_path: false_output_label
-    color: permissionless_challenge
     arrow_label: "invalid proof: reveal L*"
 outputs:
   - amount: "*"
@@ -331,7 +381,6 @@ inputs:
   - tx: assert_tx
     output: 0
     spending_path: checkpoint_equivocation
-    color: permissionless_challenge
     arrow_label: two distinct signed hashes
 outputs: []
 ```
@@ -345,12 +394,11 @@ inputs:
     output: 0
     spending_path: committee_withdraw
     sighash_flag: sighash_all
-    color: committee_presignature
+    color: nofn_presignature
   - tx: assert_tx
     output: 0
     spending_path: operator_timeout
-    color: timeout_path
-    arrow_label: after Delta from Assert
+    arrow_label: "Δ"
 outputs:
   - amount: u
     label: Operator reimbursement
@@ -362,8 +410,8 @@ outputs:
 <!-- bridgeflow:layout
 txs:
   assert_funding:
-    x: 1050
-    y: 520
+    x: 1013
+    y: 639
   assert_tx:
     x: 1850
     y: 680

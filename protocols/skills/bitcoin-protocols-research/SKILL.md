@@ -34,31 +34,32 @@ channels, swaps, custody, vaults, bridges, and other Bitcoin constructions.
 
 - Keep protocol graphs in `protocols/` and isolated reusable transaction
   primitives in `protocols/primitives/`.
-- For each new protocol, identify any required soft fork, relay-policy change,
-  or additional cryptographic capability before choosing its location. Put it
-  in a descriptive assumption folder, such as `native-zk-verifier/`, `op-cat/`,
-  `op-templatehash/`, `witness-encryption/`, or `functional-encryption/`.
-  Nest folders for combined requirements and document all of them in the folder
-  README, distinguishing consensus changes, policy changes, cryptographic
-  assumptions, and setup trust. Do not imply these capabilities are available
-  under current Bitcoin rules. An optimistic fraud-proof system does not belong
-  under `native-zk-verifier/` merely because it uses a ZK proof off-chain.
+- Create a new protocol or primitive folder only when the construction requires
+  a new Bitcoin consensus rule, such as `op-cat/`, `op-templatehash/`, or
+  `native-zk-verifier/`. Reuse a matching folder when available; nest folders
+  only for combined consensus changes. Relay-policy changes, nonstandard mining,
+  additional cryptographic capabilities, or setup trust alone do not justify a
+  new folder. An optimistic fraud-proof system does not belong under
+  `native-zk-verifier/` merely because it uses a ZK proof off-chain.
+- Include each protocol or primitive's description, source references, and all
+  required assumptions in the same Markdown file as its graph, outside
+  `bridgeflow` fences. Distinguish consensus changes, relay/mining requirements,
+  cryptographic assumptions, and setup trust. Do not imply proposed capabilities
+  are available under current Bitcoin rules. Do not create new README files.
 - Split materially different protocol variants into separate graph files.
   Keep unresolved source mechanisms explicitly marked as unspecified rather
   than inventing scripts, refund paths, or recovery transactions.
 - Reuse an existing graph when revising that protocol. Preserve transaction IDs,
   names, labels, amounts, spending paths, arrows, and layout unless the requested
   change affects them.
-- Keep existing graph files limited to their title, transaction headings,
-  `bridgeflow` metadata, and hidden layout. Explain findings in the response;
-  add protocol descriptions to Markdown only when requested.
 - Keep this skill focused on research methods and graph syntax. Protocol-specific
   explanations and preferred-design assumptions do not belong here.
 
 ## File Shape
 
 For a graph deliverable, use one Markdown file per protocol or primitive.
-The first H1 is the graph title. A top-level
+The first H1 is the graph title. Put the protocol or primitive description,
+sources, and assumptions before the first transaction section. A top-level
 `bridgeflow` YAML fence may define graph settings:
 
 ````md
@@ -71,8 +72,8 @@ color_groups:
 ````
 
 Each transaction is a `## tx: <stable_tx_id>` section. The first `bridgeflow`
-YAML fence inside the section defines the transaction. Optional prose outside
-that fence becomes its description; omit it unless requested.
+YAML fence inside the section defines the transaction. Put any transaction-specific
+description after that fence and before the next transaction section.
 
 ````md
 ## tx: funding_tx
