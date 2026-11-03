@@ -52,6 +52,27 @@ open the selected file automatically; `?workspace=default` opens the protocol fi
 Browser Back and Forward restore the selected file. Sharing supports the bundled
 default workspace, including nested folders.
 
+The deployed website opens protocols from `main` by default. Use **Open PR** with
+a pull request number to browse that PR's protocols, or follow a preview link such
+as `?pr=6&file=pow-work-limited-bridge.md`. The PR number and revision are shown
+above the graph; **Main protocols** returns to the main collection. Copy link and
+Back/Forward preserve the selected PR. PR links follow the latest head when opened;
+each loaded workspace reads its tree and Markdown from one resolved commit.
+
+PR previews are read-only and load Markdown data from GitHub, including fork PRs.
+The application itself always comes from the main deployment. Deleted files,
+unavailable PRs, incomplete trees, and API rate limits show errors instead of
+silently displaying a different protocol. In development, **Local protocols**
+continues to use the writable checkout.
+
+The **Comment protocol previews** Action creates or updates one bot comment on
+opened, reopened, updated, or retargeted PRs. It links added, modified, and renamed
+protocol Markdown files, excluding skills and repository instruction documents.
+Unrelated PRs get no comment. The Action runs trusted scripts from `main` and never
+checks out PR code. `PROTOCOL_SITE_URL` can override the default GitHub Pages URL
+through a repository Actions variable. Its manual dispatch accepts a PR number
+to refresh links on an existing PR.
+
 The development server only accepts layout changes to existing protocol Markdown
 files and refuses to overwrite a file changed since it was opened. Reopen a file
 if a save reports a conflict. Production builds use bundled files and offer

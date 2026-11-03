@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "test:workspace": "node --experimental-strip-types --test dev/protocol-workspace.test.ts",
+    "test:previews": "node --experimental-strip-types --test dev/github-workspace.test.ts ../.github/scripts/protocol-preview.test.cjs",
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
